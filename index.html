@@ -88,7 +88,7 @@
                 const response = await fetch('https://api.retellai.com/v2/create-web-call', {
                     method: 'POST',
                     headers: {
-                        'Authorization': 'Bearer public_key_70383a9602fc15fc9cdd0',
+                        'Authorization': 'Bearer public_key_427b03c76413c762e0164',
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
@@ -98,7 +98,6 @@
 
                 const data = await response.json();
 
-                // 🔥 SHOW REAL ERROR IF FAILED
                 if (!response.ok) {
                     console.error("API ERROR:", data);
                     throw new Error(data?.message || 'Failed to create call');
@@ -108,7 +107,6 @@
 
                 const accessToken = data.access_token;
 
-                // 🔥 FIX: Correct way to initialize
                 client = new window.RetellWebClient();
 
                 client.on('call_started', () => {
@@ -127,7 +125,6 @@
                     client = null;
                 });
 
-                // 🔥 FIX: pass token here
                 await client.startCall({
                     accessToken: accessToken
                 });
