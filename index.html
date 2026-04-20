@@ -68,6 +68,7 @@
     <script>
         const callButton = document.getElementById('callButton');
         const status = document.getElementById('status');
+
         let client = null;
         let isCalling = false;
 
@@ -91,18 +92,24 @@
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        'agent_id': 'agent_e7c053ec4a9fe16d18eb967e3d'
+                        agent_id: 'agent_e7c053ec4a9fe16d18eb967e3d'
                     })
                 });
 
+                const data = await response.json();
+
+                // 🔥 SHOW REAL ERROR IF FAILED
                 if (!response.ok) {
-                    throw new Error('Failed to create call');
+                    console.error("API ERROR:", data);
+                    throw new Error(data?.message || 'Failed to create call');
                 }
 
-                const data = await response.json();
+                console.log("SUCCESS:", data);
+
                 const accessToken = data.access_token;
 
-                client = new RetellWebClient(accessToken);
+                // 🔥 FIX: Correct way to initialize
+                client = new window.RetellWebClient();
 
                 client.on('call_started', () => {
                     isCalling = true;
@@ -120,17 +127,21 @@
                     client = null;
                 });
 
-                await client.startCall();
+                // 🔥 FIX: pass token here
+                await client.startCall({
+                    accessToken: accessToken
+                });
+
             } catch (error) {
                 console.error('Error starting call:', error);
-                status.textContent = 'Failed to start call. Please try again.';
+                status.textContent = 'Failed to start call. Check console (F12)';
                 callButton.disabled = false;
             }
         }
 
         function endCall() {
             if (client) {
-                client.endCall();
+                client.stopCall();
             }
         }
     </script>
