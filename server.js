@@ -1,15 +1,22 @@
 require("dotenv").config({ path: ".env.local" });
 require("dotenv").config(); // Load .env if it exists
+
+console.log("=== Process Starting ===");
+console.log("Node version:", process.version);
+console.log("Current directory:", process.cwd());
+
 const express = require("express");
 const path = require("path");
 const https = require("https");
+
+console.log("Dependencies loaded successfully");
 
 const app = express();
 const PORT = process.env.PORT || 8080;
 let RETELL_API_KEY = process.env.RETELL_API_KEY || "public_key_99cf2422bf97bf9d59e23";
 let RETELL_AGENT_ID = process.env.RETELL_AGENT_ID || "agent_e7c053ec4a9fe16d18eb967e3d";
 
-console.log("=== Server Startup ===");
+console.log("=== Server Configuration ===");
 console.log("Environment: ", process.env.NODE_ENV || "development");
 console.log("Port:", PORT);
 console.log("RETELL_API_KEY:", RETELL_API_KEY ? "****" + RETELL_API_KEY.slice(-10) : "NOT SET");
@@ -57,14 +64,28 @@ function postJson(url, data, headers = {}) {
 app.use(express.json());
 app.use(express.static(__dirname));
 
+console.log("Middleware configured");
+
 // Health check for Railway
 app.get("/health", (req, res) => {
-  res.json({ status: "ok", timestamp: new Date().toISOString() });
+  res.json({ 
+    status: "ok",
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
 });
 
 app.post("/create-call", async (req, res) => {
-
+  console.log("POST /create-call received");
+  
   try {
+    if (!RETELL_API_KEY || !RETELL_AGENT_ID) {
+      console.warn("Missing credentials - will use defaults");
+      return res.status(500).json({
+        error: "Server configuration error: RETELL_API_KEY and RETELL_AGENT_ID must be set."
+      });
+    }
+
     console.log("Making request to Retell with:", {
       agent_id: RETELL_AGENT_ID,
       authHeader: `Bearer ${RETELL_API_KEY?.slice(0, 20)}...`
@@ -95,7 +116,8 @@ app.post("/create-call", async (req, res) => {
 
     return res.status(200).json(result.body);
   } catch (error) {
-    console.error("Create call error:", error);
+    console.error("Create call error:", error.message);
+    console.error("Stack:", error.stack);
     console.error("API Key exists:", !!RETELL_API_KEY);
     console.error("Agent ID exists:", !!RETELL_AGENT_ID);
     return res.status(500).json({
@@ -106,25 +128,47 @@ app.post("/create-call", async (req, res) => {
 });
 
 app.get("/", (req, res) => {
+  console.log("GET / - Serving index.html");
   res.sendFile(path.join(__dirname, "index.html"));
 });
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error("Server error:", err);
+  console.error("Unhandled server error:", err.message);
+  console.error("Stack:", err.stack);
   res.status(500).json({
     error: "Internal server error",
-    message: err.message
+    message: err.message,
+    url: req.url,
+    method: req.method
   });
 });
 
+console.log("Setting up server listener...");
+
 const server = app.listen(PORT, "0.0.0.0", () => {
+  console.log("=== SERVER STARTED ===");
   console.log(`✓ Server running on port ${PORT}`);
+  console.log(`✓ Open http://localhost:${PORT} to view`);
+  console.log("=======================");
+});
+
+server.on("error", (err) => {
+  console.error("Server error:", err);
+  process.exit(1);
 });
 
 // Graceful shutdown
 process.on("SIGTERM", () => {
   console.log("SIGTERM received, shutting down gracefully");
+  server.close(() => {
+    console.log("Server closed");
+    process.exit(0);
+  });
+});
+
+process.on("SIGINT", () => {
+  console.log("SIGINT received, shutting down gracefully");
   server.close(() => {
     console.log("Server closed");
     process.exit(0);
