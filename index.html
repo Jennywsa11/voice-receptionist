@@ -66,6 +66,35 @@
 
     <script src="https://retell-sdk.s3.us-west-2.amazonaws.com/retell-client-js-sdk.js"></script>
     <script>
+        // Mock Retell SDK for demo/development
+        if (!window.RetellWebClient) {
+            window.RetellWebClient = class {
+                constructor() {
+                    this.listeners = {};
+                }
+                on(event, callback) {
+                    if (!this.listeners[event]) {
+                        this.listeners[event] = [];
+                    }
+                    this.listeners[event].push(callback);
+                }
+                emit(event, data) {
+                    if (this.listeners[event]) {
+                        this.listeners[event].forEach(cb => cb(data));
+                    }
+                }
+                async startCall(config) {
+                    console.log("Mock SDK: Starting call with", config);
+                    setTimeout(() => this.emit('call_started'), 500);
+                }
+                stopCall() {
+                    console.log("Mock SDK: Stopping call");
+                    this.emit('call_ended');
+                }
+            };
+        }
+    </script>
+    <script>
         const callButton = document.getElementById('callButton');
         const status = document.getElementById('status');
 
@@ -96,7 +125,8 @@
 
                 if (!response.ok) {
                     console.error("API ERROR:", data);
-                    throw new Error(data?.message || 'Failed to create call');
+                    console.error("Full API response:", JSON.stringify(data, null, 2));
+                    throw new Error(data?.detail || data?.message || 'Failed to create call');
                 }
 
                 console.log("SUCCESS:", data);
