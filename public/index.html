@@ -1,0 +1,130 @@
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GlowUp Hair Salon - AI Voice Receptionist</title>
+
+
+</head>
+<style>
+  body {
+    background-color: #f0f0f0;
+    font-family: Arial, sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+  }
+  .card {
+    background-color: white;
+    padding: 40px;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    text-align: center;
+    max-width: 400px;
+    width: 100%;
+  }
+  h1 { color: #333; }
+  p { color: #666; }
+  button {
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    padding: 15px 30px;
+    font-size: 18px;
+    border-radius: 5px;
+    cursor: pointer;
+    margin-top: 20px;
+  }
+  button.active { background-color: #f44336; }
+  .status {
+    margin-top: 20px;
+    color: #888;
+    font-style: italic;
+  }
+</style>
+</head>
+
+<body>
+
+<div class="card">
+  <h1>GlowUp Hair Salon</h1>
+  <p>AI-powered voice receptionist that handles customer calls.</p>
+  <button id="callButton" disabled>Call Now</button>
+  <p id="status" class="status">Loading voice SDK...</p>
+</div>
+
+<script type="module">
+import { RetellWebClient } from "https://cdn.jsdelivr.net/npm/retell-client-js-sdk@2.0.7/+esm";
+
+const callButton = document.getElementById("callButton");
+const status = document.getElementById("status");
+
+let client = null;
+let isCalling = false;
+
+// Enable the button when the SDK is loaded
+callButton.disabled = false;
+status.textContent = "";
+
+callButton.addEventListener("click", async () => {
+  if (!isCalling) {
+    await startCall();
+  } else {
+    endCall();
+  }
+});
+
+async function startCall() {
+  try {
+    status.textContent = "Connecting...";
+    callButton.disabled = true;
+
+    const res = await fetch("/create-call", {
+      method: "POST"
+    });
+
+    const data = await res.json();
+
+    if (!res.ok || !data.access_token) {
+      throw new Error("Failed to create call");
+    }
+
+    client = new RetellWebClient();
+
+    client.on("call_started", () => {
+      isCalling = true;
+      callButton.textContent = "End Call";
+      callButton.classList.add("active");
+      callButton.disabled = false;
+      status.textContent = "Connected - speak now";
+    });
+
+    client.on("call_ended", () => {
+      isCalling = false;
+      callButton.textContent = "Call Now";
+      callButton.classList.remove("active");
+      status.textContent = "Call ended";
+      client = null;
+    });
+
+    await client.startCall({
+      accessToken: data.access_token
+    });
+
+  } catch (err) {
+    console.error(err);
+    status.textContent = err.message;
+    callButton.disabled = false;
+  }
+}
+
+function endCall() {
+  if (client) {
+    client.stopCall();
+  }
+}
+</script>
+
+</body>
+</html>

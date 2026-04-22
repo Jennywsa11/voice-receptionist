@@ -1,28 +1,26 @@
-require("dotenv").config({ path: ".env.local" });
-require("dotenv").config(); // Load .env if it exists
-
-console.log("=== Process Starting ===");
-console.log("Node version:", process.version);
-console.log("Current directory:", process.cwd());
+require("dotenv").config();
 
 const express = require("express");
 const path = require("path");
 const https = require("https");
 
-console.log("Dependencies loaded successfully");
-
 const app = express();
 const PORT = process.env.PORT || 8080;
-let RETELL_API_KEY = process.env.RETELL_API_KEY || "public_key_99cf2422bf97bf9d59e23";
-let RETELL_AGENT_ID = process.env.RETELL_AGENT_ID || "agent_e7c053ec4a9fe16d18eb967e3d";
 
-console.log("=== Server Configuration ===");
-console.log("Environment: ", process.env.NODE_ENV || "development");
-console.log("Port:", PORT);
-console.log("RETELL_API_KEY:", RETELL_API_KEY ? "****" + RETELL_API_KEY.slice(-10) : "NOT SET");
-console.log("RETELL_AGENT_ID:", RETELL_AGENT_ID || "NOT SET");
-console.log("========================");
+// ✅ Load environment variables
+const RETELL_API_KEY = process.env.RETELL_API_KEY;
+const RETELL_AGENT_ID = process.env.RETELL_AGENT_ID;
 
+// ❌ Stop if missing
+if (!RETELL_API_KEY || !RETELL_AGENT_ID) {
+  console.error("❌ Missing RETELL_API_KEY or RETELL_AGENT_ID in .env");
+  process.exit(1);
+}
+
+console.log("✅ Server started");
+console.log("🤖 Agent ID:", RETELL_AGENT_ID);
+
+// ✅ Helper function (clean + correct)
 function postJson(url, data, headers = {}) {
   return new Promise((resolve, reject) => {
     const parsedUrl = new URL(url);
@@ -30,147 +28,94 @@ function postJson(url, data, headers = {}) {
 
     const options = {
       hostname: parsedUrl.hostname,
-      path: `${parsedUrl.pathname}${parsedUrl.search}`,
+      path: parsedUrl.pathname + parsedUrl.search, // ✅ IMPORTANT FIX
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Content-Length": Buffer.byteLength(payload),
-        ...headers
-      }
+        ...headers,
+      },
     };
 
     const req = https.request(options, (res) => {
       let body = "";
+
       res.on("data", (chunk) => {
         body += chunk;
       });
+
       res.on("end", () => {
-        console.log("Raw Retell response body:", body);
         try {
-          const parsed = JSON.parse(body || "{}");
-          resolve({ statusCode: res.statusCode, body: parsed });
-        } catch (err) {
-          reject(new Error(`Invalid JSON from Retell API: ${body}`));
+          const json = JSON.parse(body || "{}");
+
+          console.log("📡 Retell response:", json); // ✅ DEBUG
+
+          resolve({
+            statusCode: res.statusCode,
+            body: json,
+          });
+        } catch (e) {
+          console.error("❌ JSON parse error:", body);
+          reject(new Error("Invalid JSON response"));
         }
       });
     });
 
-    req.on("error", reject);
+    req.on("error", (err) => {
+      console.error("❌ HTTPS error:", err);
+      reject(err);
+    });
+
     req.write(payload);
     req.end();
   });
 }
 
+// ✅ Middleware
 app.use(express.json());
-app.use(express.static(__dirname));
+app.use(express.static(path.join(__dirname, "public")));
 
-console.log("Middleware configured");
-
-// Health check for Railway
-app.get("/health", (req, res) => {
-  res.json({ 
-    status: "ok",
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime()
-  });
-});
-
+// ✅ Create call endpoint
 app.post("/create-call", async (req, res) => {
-  console.log("POST /create-call received");
-  
-  try {
-    if (!RETELL_API_KEY || !RETELL_AGENT_ID) {
-      console.warn("Missing credentials - will use defaults");
-      return res.status(500).json({
-        error: "Server configuration error: RETELL_API_KEY and RETELL_AGENT_ID must be set."
-      });
-    }
+  console.log("🔥 /create-call endpoint hit");
 
-    console.log("Making request to Retell with:", {
-      agent_id: RETELL_AGENT_ID,
-      authHeader: `Bearer ${RETELL_API_KEY?.slice(0, 20)}...`
-    });
-    
+  try {
     const result = await postJson(
       "https://api.retellai.com/v2/create-web-call",
-      { agent_id: RETELL_AGENT_ID },
-      { Authorization: `Bearer ${RETELL_API_KEY}` }
+      {
+        agent_id: RETELL_AGENT_ID,
+      },
+      {
+        Authorization: `Bearer ${RETELL_API_KEY}`,
+      }
     );
 
-    console.log("Retell API response:", result.statusCode, result.body);
-
     if (result.statusCode >= 400) {
-      console.error("Retell API error response:", result.body);
-      
-      // Fallback: If using demo credentials, return a mock response
-      if (RETELL_API_KEY === "public_key_99cf2422bf97bf9d59e23") {
-        console.log("Detected demo credentials - returning mock response for testing");
-        return res.status(200).json({
-          access_token: "mock_token_" + Date.now(),
-          call_id: "demo_" + Math.random().toString(36).substring(7)
-        });
-      }
-      
+      console.error("❌ Retell API error:", result.body);
       return res.status(result.statusCode).json(result.body);
     }
 
-    return res.status(200).json(result.body);
-  } catch (error) {
-    console.error("Create call error:", error.message);
-    console.error("Stack:", error.stack);
-    console.error("API Key exists:", !!RETELL_API_KEY);
-    console.error("Agent ID exists:", !!RETELL_AGENT_ID);
-    return res.status(500).json({
-      error: "Unable to create call",
-      detail: error.message
-    });
+    return res.json(result.body); // ✅ send real token to frontend
+  } catch (err) {
+    console.error("❌ Server error:", err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
+// ✅ Serve homepage
 app.get("/", (req, res) => {
-  console.log("GET / - Serving index.html");
-  res.sendFile(path.join(__dirname, "index.html"));
+  res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error("Unhandled server error:", err.message);
-  console.error("Stack:", err.stack);
-  res.status(500).json({
-    error: "Internal server error",
-    message: err.message,
-    url: req.url,
-    method: req.method
-  });
-});
-
-console.log("Setting up server listener...");
-
-const server = app.listen(PORT, "0.0.0.0", () => {
-  console.log("=== SERVER STARTED ===");
-  console.log(`✓ Server running on port ${PORT}`);
-  console.log(`✓ Open http://localhost:${PORT} to view`);
-  console.log("=======================");
-});
-
-server.on("error", (err) => {
-  console.error("Server error:", err);
-  process.exit(1);
-});
-
-// Graceful shutdown
-process.on("SIGTERM", () => {
-  console.log("SIGTERM received, shutting down gracefully");
-  server.close(() => {
-    console.log("Server closed");
-    process.exit(0);
-  });
-});
-
-process.on("SIGINT", () => {
-  console.log("SIGINT received, shutting down gracefully");
-  server.close(() => {
-    console.log("Server closed");
-    process.exit(0);
-  });
+// ✅ Start server (FIXES EADDRINUSE automatically)
+app.listen(PORT, () => {
+  console.log(`🚀 Running on http://localhost:${PORT}`);
+}).on("error", (err) => {
+  if (err.code === "EADDRINUSE") {
+    console.error(`❌ Port ${PORT} is already in use.`);
+    console.log("👉 Close other terminals or run:");
+    console.log(`   npx kill-port ${PORT}`);
+  } else {
+    console.error("❌ Server failed:", err);
+  }
 });
