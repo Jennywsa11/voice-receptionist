@@ -1,0 +1,197 @@
+{
+    "updatedAt":  "2026-04-22T13:08:33.630Z",
+    "createdAt":  "2026-04-22T13:07:11.032Z",
+    "id":  "jSDpETG8QBYswb2h",
+    "name":  "Discord Relay (Internal)",
+    "description":  null,
+    "active":  true,
+    "isArchived":  false,
+    "nodes":  [
+                  {
+                      "position":  [
+                                       0,
+                                       0
+                                   ],
+                      "name":  "Webhook",
+                      "id":  "relay-webhook-1",
+                      "type":  "n8n-nodes-base.webhook",
+                      "parameters":  {
+                                         "path":  "discord-relay-6f2b9a",
+                                         "options":  {
+
+                                                     },
+                                         "httpMethod":  "POST"
+                                     },
+                      "typeVersion":  2.1,
+                      "webhookId":  "5d92229d-5c4c-4c09-b958-cdbe0d386760"
+                  },
+                  {
+                      "position":  [
+                                       240,
+                                       0
+                                   ],
+                      "name":  "Post to Discord",
+                      "id":  "relay-http-1",
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "parameters":  {
+                                         "sendBody":  true,
+                                         "headerParameters":  {
+                                                                  "parameters":  [
+                                                                                     {
+                                                                                         "value":  "application/json",
+                                                                                         "name":  "Content-Type"
+                                                                                     }
+                                                                                 ]
+                                                              },
+                                         "bodyParameters":  {
+                                                                "parameters":  [
+                                                                                   {
+                                                                                       "value":  "={{$json.body.content || $json.content || \"New message\"}}",
+                                                                                       "name":  "content"
+                                                                                   }
+                                                                               ]
+                                                            },
+                                         "method":  "POST",
+                                         "options":  {
+
+                                                     },
+                                         "sendHeaders":  true,
+                                         "url":  "https://discordapp.com/api/webhooks/1492752281882333416/D--Rp3pHwRnLL1FSEkRpxDrIsadriNsXRTEEakBTah6JBYF2EocSAgsH853cBafKTRmw"
+                                     },
+                      "typeVersion":  4.4
+                  }
+              ],
+    "connections":  {
+                        "Webhook":  {
+                                        "main":  [
+                                                     [
+                                                         {
+                                                             "node":  "Post to Discord",
+                                                             "type":  "main",
+                                                             "index":  0
+                                                         }
+                                                     ]
+                                                 ]
+                                    }
+                    },
+    "settings":  {
+                     "executionOrder":  "v1"
+                 },
+    "staticData":  null,
+    "meta":  null,
+    "pinData":  null,
+    "versionId":  "6dd28028-ac40-4de7-bf4f-699c80029bfa",
+    "activeVersionId":  "6dd28028-ac40-4de7-bf4f-699c80029bfa",
+    "versionCounter":  4,
+    "triggerCount":  1,
+    "shared":  [
+                   {
+                       "updatedAt":  "2026-04-22T13:07:11.032Z",
+                       "createdAt":  "2026-04-22T13:07:11.032Z",
+                       "role":  "workflow:owner",
+                       "workflowId":  "jSDpETG8QBYswb2h",
+                       "projectId":  "39Z9vXFHHLXQbFwV",
+                       "project":  {
+                                       "updatedAt":  "2026-04-17T02:57:52.456Z",
+                                       "createdAt":  "2026-04-17T02:46:46.254Z",
+                                       "id":  "39Z9vXFHHLXQbFwV",
+                                       "name":  "Jenny Yburan \u003cjenny.wsa11@gmail.com\u003e",
+                                       "type":  "personal",
+                                       "icon":  null,
+                                       "description":  null,
+                                       "creatorId":  "04464fc4-277f-4fc8-9388-38e8a54737d2"
+                                   }
+                   }
+               ],
+    "tags":  [
+
+             ],
+    "activeVersion":  {
+                          "updatedAt":  "2026-04-22T13:08:33.633Z",
+                          "createdAt":  "2026-04-22T13:08:33.633Z",
+                          "versionId":  "6dd28028-ac40-4de7-bf4f-699c80029bfa",
+                          "workflowId":  "jSDpETG8QBYswb2h",
+                          "nodes":  [
+                                        {
+                                            "position":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                            "name":  "Webhook",
+                                            "id":  "relay-webhook-1",
+                                            "type":  "n8n-nodes-base.webhook",
+                                            "parameters":  {
+                                                               "path":  "discord-relay-6f2b9a",
+                                                               "options":  {
+
+                                                                           },
+                                                               "httpMethod":  "POST"
+                                                           },
+                                            "typeVersion":  2.1,
+                                            "webhookId":  "5d92229d-5c4c-4c09-b958-cdbe0d386760"
+                                        },
+                                        {
+                                            "position":  [
+                                                             240,
+                                                             0
+                                                         ],
+                                            "name":  "Post to Discord",
+                                            "id":  "relay-http-1",
+                                            "type":  "n8n-nodes-base.httpRequest",
+                                            "parameters":  {
+                                                               "sendBody":  true,
+                                                               "headerParameters":  {
+                                                                                        "parameters":  [
+                                                                                                           {
+                                                                                                               "value":  "application/json",
+                                                                                                               "name":  "Content-Type"
+                                                                                                           }
+                                                                                                       ]
+                                                                                    },
+                                                               "bodyParameters":  {
+                                                                                      "parameters":  [
+                                                                                                         {
+                                                                                                             "value":  "={{$json.body.content || $json.content || \"New message\"}}",
+                                                                                                             "name":  "content"
+                                                                                                         }
+                                                                                                     ]
+                                                                                  },
+                                                               "method":  "POST",
+                                                               "options":  {
+
+                                                                           },
+                                                               "sendHeaders":  true,
+                                                               "url":  "https://discordapp.com/api/webhooks/1492752281882333416/D--Rp3pHwRnLL1FSEkRpxDrIsadriNsXRTEEakBTah6JBYF2EocSAgsH853cBafKTRmw"
+                                                           },
+                                            "typeVersion":  4.4
+                                        }
+                                    ],
+                          "connections":  {
+                                              "Webhook":  {
+                                                              "main":  [
+                                                                           [
+                                                                               {
+                                                                                   "node":  "Post to Discord",
+                                                                                   "type":  "main",
+                                                                                   "index":  0
+                                                                               }
+                                                                           ]
+                                                                       ]
+                                                          }
+                                          },
+                          "authors":  "Jenny Yburan",
+                          "name":  null,
+                          "description":  null,
+                          "autosaved":  false,
+                          "workflowPublishHistory":  [
+                                                         {
+                                                             "createdAt":  "2026-04-22T13:08:34.164Z",
+                                                             "id":  28,
+                                                             "workflowId":  "jSDpETG8QBYswb2h",
+                                                             "versionId":  "6dd28028-ac40-4de7-bf4f-699c80029bfa",
+                                                             "event":  "activated",
+                                                             "userId":  "04464fc4-277f-4fc8-9388-38e8a54737d2"
+                                                         }
+                                                     ]
+                      }
+}

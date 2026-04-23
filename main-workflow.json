@@ -1,0 +1,850 @@
+{
+    "updatedAt":  "2026-04-22T13:08:51.642Z",
+    "createdAt":  "2026-04-21T03:24:32.735Z",
+    "id":  "BsDARTWWev6AHiQf",
+    "name":  "3B - Receptionist Post-Call",
+    "description":  null,
+    "active":  true,
+    "isArchived":  false,
+    "nodes":  [
+                  {
+                      "parameters":  {
+                                         "httpMethod":  "POST",
+                                         "path":  "receptionist-call",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "type":  "n8n-nodes-base.webhook",
+                      "typeVersion":  2.1,
+                      "position":  [
+                                       0,
+                                       0
+                                   ],
+                      "id":  "14ecfa7a-38bc-4b0d-ad43-cf02378c4a7c",
+                      "name":  "Webhook",
+                      "webhookId":  "4f3c15c9-f32b-4163-91e0-4869cba28a5f"
+                  },
+                  {
+                      "parameters":  {
+                                         "method":  "POST",
+                                         "url":  "https://api.openai.com/v1/chat/completions",
+                                         "sendHeaders":  true,
+                                         "headerParameters":  {
+                                                                  "parameters":  [
+                                                                                     {
+                                                                                         "name":  "Content-Type",
+                                                                                         "value":  "application/json"
+                                                                                     }
+                                                                                 ]
+                                                              },
+                                         "sendBody":  true,
+                                         "specifyBody":  "json",
+                                         "jsonBody":  "{\n  \"model\": \"gpt-4o-mini\",\n  \"response_format\": { \"type\": \"json_object\" },\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Extract structured fields from a receptionist call transcript. Return JSON only with keys: caller_name, request, details, preferred_date. Use information explicitly present in the transcript. If a field is not present, set it to \\\"Unknown\\\". Do not invent facts.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Transcript:\\n{{ $json.body.call_transcript || ($json.body.call \u0026\u0026 $json.body.call.transcript) || \\\"\\\" }}\"\n    }\n  ]\n}",
+                                         "options":  {
+
+                                                     },
+                                         "authentication":  "genericCredentialType",
+                                         "genericAuthType":  "httpHeaderAuth"
+                                     },
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "typeVersion":  4.4,
+                      "position":  [
+                                       208,
+                                       0
+                                   ],
+                      "id":  "b425e78d-e227-4da3-ac16-ba1e5e2898dc",
+                      "name":  "HTTP Request",
+                      "credentials":  {
+                                          "httpHeaderAuth":  {
+                                                                 "id":  "LG83vj4C6UPN5AQX",
+                                                                 "name":  "OpenAI Auth Header"
+                                                             }
+                                      }
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "function isUnknown(v) {\n  return !v || String(v).trim() === \u0027\u0027 || String(v).trim().toLowerCase() === \u0027unknown\u0027;\n}\n\nfunction extractFromTranscript(text) {\n  const t = String(text || \u0027\u0027).trim();\n  if (!t) {\n    return {\n      caller_name: \u0027Unknown\u0027,\n      request: \u0027Unknown\u0027,\n      details: \u0027Unknown\u0027,\n      preferred_date: \u0027Unknown\u0027,\n    };\n  }\n\n  const nameMatch = t.match(/(?:this is|i am|i\u0027m|my name is)\\s+([A-Z][a-z]+(?:\\s+[A-Z][a-z]+){0,2})/i);\n  const dateMatch = t.match(/\\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tomorrow)(?:\\s+at\\s+\\d{1,2}(?::\\d{2})?\\s*(?:am|pm)?)?/i)\n    || t.match(/\\b\\d{1,2}(?::\\d{2})?\\s*(?:am|pm)\\b/i);\n\n  const requestSentence = t.split(/(?\u003c=[.!?])\\s+/).find((s) =\u003e\n    /\\b(schedule|book|set up|appointment|follow-up|consultation|repair|estimate|call|meeting)\\b/i.test(s)\n  );\n\n  return {\n    caller_name: nameMatch ? nameMatch[1].trim() : \u0027Unknown\u0027,\n    request: requestSentence ? requestSentence.trim() : t.slice(0, 180),\n    details: t,\n    preferred_date: dateMatch ? dateMatch[0].trim() : \u0027Unknown\u0027,\n  };\n}\n\nconst first = $input.first();\nconst raw = (((first || {}).json || {}).choices || [])[0]?.message?.content || \u0027\u0027;\n\nlet cleaned = String(raw)\n  .replace(/```json/g, \u0027\u0027)\n  .replace(/```/g, \u0027\u0027)\n  .trim();\n\nlet data;\n\ntry {\n  data = JSON.parse(cleaned);\n} catch (e) {\n  data = {\n    caller_name: \u0027Unknown\u0027,\n    request: \u0027Unknown\u0027,\n    details: cleaned || \u0027Unknown\u0027,\n    preferred_date: \u0027Unknown\u0027,\n  };\n}\n\nif (!data.caller_name || /john\\s+doe/i.test(String(data.caller_name))) {\n  data.caller_name = \u0027Unknown\u0027;\n}\n\nfor (const key of [\u0027caller_name\u0027, \u0027request\u0027, \u0027details\u0027, \u0027preferred_date\u0027]) {\n  if (!data[key] || String(data[key]).trim() === \u0027\u0027) {\n    data[key] = \u0027Unknown\u0027;\n  }\n}\n\nlet transcript = \u0027\u0027;\ntry {\n  transcript = String($(\u0027Webhook\u0027).first().json.body.call?.transcript || $(\u0027Webhook\u0027).first().json.body.call_transcript || \u0027\u0027);\n} catch (e) {\n  transcript = \u0027\u0027;\n}\n\nif (isUnknown(data.caller_name) || isUnknown(data.request) || isUnknown(data.preferred_date)) {\n  const fallback = extractFromTranscript(transcript);\n  if (isUnknown(data.caller_name)) data.caller_name = fallback.caller_name;\n  if (isUnknown(data.request)) data.request = fallback.request;\n  if (isUnknown(data.details)) data.details = fallback.details;\n  if (isUnknown(data.preferred_date)) data.preferred_date = fallback.preferred_date;\n}\n\nreturn [{ json: data }];"
+                                     },
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       416,
+                                       0
+                                   ],
+                      "id":  "7bb18523-dfd9-43c3-8b36-0798e1ffeac5",
+                      "name":  "Code in JavaScript"
+                  },
+                  {
+                      "parameters":  {
+                                         "method":  "POST",
+                                         "url":  "https://ghxstoslnwpsuqhlxgpc.supabase.co/rest/v1/receptionist_calls",
+                                         "sendHeaders":  true,
+                                         "headerParameters":  {
+                                                                  "parameters":  [
+                                                                                     {
+                                                                                         "name":  "Content-Type",
+                                                                                         "value":  "application/json"
+                                                                                     }
+                                                                                 ]
+                                                              },
+                                         "sendBody":  true,
+                                         "specifyBody":  "json",
+                                         "jsonBody":  "={\n  \"caller_name\": \"{{ $json.caller_name }}\",\n  \"request\": \"{{ $json.request }}\",\n  \"details\": \"{{ $json.details }}\",\n  \"preferred_date\": \"{{ $json.preferred_date }}\"\n}",
+                                         "options":  {
+
+                                                     },
+                                         "authentication":  "genericCredentialType",
+                                         "genericAuthType":  "httpHeaderAuth"
+                                     },
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "typeVersion":  4.4,
+                      "position":  [
+                                       624,
+                                       0
+                                   ],
+                      "id":  "0db8fbc3-859f-476c-8372-228534c9d723",
+                      "name":  "HTTP Request1",
+                      "credentials":  {
+                                          "httpHeaderAuth":  {
+                                                                 "id":  "8PdwVP6SKBclicX2",
+                                                                 "name":  "Supabase API Key Header"
+                                                             }
+                                      }
+                  },
+                  {
+                      "parameters":  {
+                                         "calendar":  {
+                                                          "__rl":  true,
+                                                          "value":  "jenny.wsa11@gmail.com",
+                                                          "mode":  "list",
+                                                          "cachedResultName":  "jenny.wsa11@gmail.com"
+                                                      },
+                                         "start":  "={{$json.preferred_date ? new Date($json.preferred_date).toISOString() : $now.toISO()}}",
+                                         "end":  "={{$json.preferred_date ? new Date(new Date($json.preferred_date).getTime() + 60*60*1000).toISOString() : $now.plus({hours:1}).toISO()}}",
+                                         "additionalFields":  {
+                                                                  "description":  "={{$json.details || \"No details provided\"}}",
+                                                                  "summary":  "={{$json.caller_name || \"Unknown\"}} - {{$json.request || \"No request\"}}"
+                                                              }
+                                     },
+                      "type":  "n8n-nodes-base.googleCalendar",
+                      "typeVersion":  1.3,
+                      "position":  [
+                                       832,
+                                       0
+                                   ],
+                      "id":  "e206a859-1f68-4254-ad99-7349b93dd8c2",
+                      "name":  "Create an event",
+                      "credentials":  {
+                                          "googleCalendarOAuth2Api":  {
+                                                                          "id":  "gS1OFrdxHIsgWw8V",
+                                                                          "name":  "Google Calendar account"
+                                                                      }
+                                      }
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "append",
+                                         "documentId":  {
+                                                            "__rl":  true,
+                                                            "value":  "1X8laM3UpB4SGsxh7-c9TZjXln-TuvZlTVqqCW2s3oV4",
+                                                            "mode":  "list",
+                                                            "cachedResultName":  "Receptionist Records",
+                                                            "cachedResultUrl":  "https://docs.google.com/spreadsheets/d/1X8laM3UpB4SGsxh7-c9TZjXln-TuvZlTVqqCW2s3oV4/edit?usp=drivesdk"
+                                                        },
+                                         "sheetName":  {
+                                                           "__rl":  true,
+                                                           "value":  "gid=0",
+                                                           "mode":  "list",
+                                                           "cachedResultName":  "Sheet1",
+                                                           "cachedResultUrl":  "https://docs.google.com/spreadsheets/d/1X8laM3UpB4SGsxh7-c9TZjXln-TuvZlTVqqCW2s3oV4/edit#gid=0"
+                                                       },
+                                         "columns":  {
+                                                         "mappingMode":  "defineBelow",
+                                                         "value":  {
+                                                                       "Date":  "={{ new Date().toISOString() }}",
+                                                                       "Name":  "={{$json.caller_name || \"Unknown\"}}",
+                                                                       "Request":  "={{$json.request || \"No request\"}}",
+                                                                       "Details":  "={{$json.details || \"No details\"}}",
+                                                                       "Preferred Date":  "={{ new Date().toISOString() }}"
+                                                                   },
+                                                         "matchingColumns":  [
+
+                                                                             ],
+                                                         "schema":  [
+                                                                        {
+                                                                            "id":  "Date",
+                                                                            "displayName":  "Date",
+                                                                            "required":  false,
+                                                                            "defaultMatch":  false,
+                                                                            "display":  true,
+                                                                            "type":  "string",
+                                                                            "canBeUsedToMatch":  true
+                                                                        },
+                                                                        {
+                                                                            "id":  "Name",
+                                                                            "displayName":  "Name",
+                                                                            "required":  false,
+                                                                            "defaultMatch":  false,
+                                                                            "display":  true,
+                                                                            "type":  "string",
+                                                                            "canBeUsedToMatch":  true
+                                                                        },
+                                                                        {
+                                                                            "id":  "Request",
+                                                                            "displayName":  "Request",
+                                                                            "required":  false,
+                                                                            "defaultMatch":  false,
+                                                                            "display":  true,
+                                                                            "type":  "string",
+                                                                            "canBeUsedToMatch":  true
+                                                                        },
+                                                                        {
+                                                                            "id":  "Details",
+                                                                            "displayName":  "Details",
+                                                                            "required":  false,
+                                                                            "defaultMatch":  false,
+                                                                            "display":  true,
+                                                                            "type":  "string",
+                                                                            "canBeUsedToMatch":  true
+                                                                        },
+                                                                        {
+                                                                            "id":  "Preferred Date",
+                                                                            "displayName":  "Preferred Date",
+                                                                            "required":  false,
+                                                                            "defaultMatch":  false,
+                                                                            "display":  true,
+                                                                            "type":  "string",
+                                                                            "canBeUsedToMatch":  true
+                                                                        }
+                                                                    ],
+                                                         "attemptToConvertTypes":  false,
+                                                         "convertFieldsToString":  false
+                                                     },
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "type":  "n8n-nodes-base.googleSheets",
+                      "typeVersion":  4.7,
+                      "position":  [
+                                       1040,
+                                       0
+                                   ],
+                      "id":  "b65ae6cc-252f-4a60-8289-3bd4a38d4800",
+                      "name":  "Append row in sheet",
+                      "credentials":  {
+                                          "googleSheetsOAuth2Api":  {
+                                                                        "id":  "LysT6X7fC5v8rYpO",
+                                                                        "name":  "Google Sheets account"
+                                                                    }
+                                      }
+                  },
+                  {
+                      "parameters":  {
+                                         "sendBody":  true,
+                                         "headerParameters":  {
+                                                                  "parameters":  [
+                                                                                     {
+                                                                                         "value":  "application/json",
+                                                                                         "name":  "Content-Type"
+                                                                                     }
+                                                                                 ]
+                                                              },
+                                         "bodyParameters":  {
+                                                                "parameters":  [
+                                                                                   {
+                                                                                       "value":  "=?? **New Call Received**`n`n?? **Name:** {{$node[\"Code in JavaScript\"].json.caller_name}}`n?? **Request:** {{$node[\"Code in JavaScript\"].json.request}}`n?? **Details:** {{$node[\"Code in JavaScript\"].json.details}}`n?? **Preferred Date:** {{$node[\"Code in JavaScript\"].json.preferred_date}}",
+                                                                                       "name":  "content"
+                                                                                   }
+                                                                               ]
+                                                            },
+                                         "method":  "POST",
+                                         "options":  {
+
+                                                     },
+                                         "sendHeaders":  true,
+                                         "url":  "https://primary-production-a826.up.railway.app/webhook/discord-relay-6f2b9a"
+                                     },
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "typeVersion":  4.4,
+                      "position":  [
+                                       1248,
+                                       0
+                                   ],
+                      "id":  "5cdbbb3b-31e3-4415-a2a8-655aebe4156a",
+                      "name":  "HTTP Request2",
+                      "webhookId":  "1d7e9814-c374-4049-940d-d79a4721350c"
+                  },
+                  {
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "options":  {
+                                                                            "caseSensitive":  true,
+                                                                            "leftValue":  "",
+                                                                            "typeValidation":  "strict",
+                                                                            "version":  2
+                                                                        },
+                                                            "conditions":  [
+                                                                               {
+                                                                                   "id":  "event-condition",
+                                                                                   "leftValue":  "={{$json.body.event}}",
+                                                                                   "rightValue":  "call_analyzed",
+                                                                                   "operator":  {
+                                                                                                    "type":  "string",
+                                                                                                    "operation":  "equals"
+                                                                                                }
+                                                                               }
+                                                                           ],
+                                                            "combinator":  "and"
+                                                        },
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  2.2,
+                      "position":  [
+                                       104,
+                                       0
+                                   ],
+                      "id":  "3df12d59-6b28-4e1c-83d4-cf5f4cbf36af",
+                      "name":  "Only call_analyzed"
+                  }
+              ],
+    "connections":  {
+                        "Webhook":  {
+                                        "main":  [
+                                                     [
+                                                         {
+                                                             "node":  "Only call_analyzed",
+                                                             "type":  "main",
+                                                             "index":  0
+                                                         }
+                                                     ]
+                                                 ]
+                                    },
+                        "HTTP Request":  {
+                                             "main":  [
+                                                          [
+                                                              {
+                                                                  "node":  "Code in JavaScript",
+                                                                  "type":  "main",
+                                                                  "index":  0
+                                                              }
+                                                          ]
+                                                      ]
+                                         },
+                        "Code in JavaScript":  {
+                                                   "main":  [
+                                                                [
+                                                                    {
+                                                                        "node":  "HTTP Request1",
+                                                                        "type":  "main",
+                                                                        "index":  0
+                                                                    }
+                                                                ]
+                                                            ]
+                                               },
+                        "HTTP Request1":  {
+                                              "main":  [
+                                                           [
+                                                               {
+                                                                   "node":  "Create an event",
+                                                                   "type":  "main",
+                                                                   "index":  0
+                                                               }
+                                                           ]
+                                                       ]
+                                          },
+                        "Create an event":  {
+                                                "main":  [
+                                                             [
+                                                                 {
+                                                                     "node":  "Append row in sheet",
+                                                                     "type":  "main",
+                                                                     "index":  0
+                                                                 }
+                                                             ]
+                                                         ]
+                                            },
+                        "Append row in sheet":  {
+                                                    "main":  [
+                                                                 [
+                                                                     {
+                                                                         "node":  "HTTP Request2",
+                                                                         "type":  "main",
+                                                                         "index":  0
+                                                                     }
+                                                                 ]
+                                                             ]
+                                                },
+                        "Only call_analyzed":  {
+                                                   "main":  [
+                                                                [
+                                                                    {
+                                                                        "node":  "HTTP Request",
+                                                                        "type":  "main",
+                                                                        "index":  0
+                                                                    }
+                                                                ],
+                                                                [
+
+                                                                ]
+                                                            ]
+                                               }
+                    },
+    "settings":  {
+                     "executionOrder":  "v1",
+                     "binaryMode":  "separate"
+                 },
+    "staticData":  null,
+    "meta":  {
+                 "templateCredsSetupCompleted":  true
+             },
+    "pinData":  {
+
+                },
+    "versionId":  "e9e84cb7-0270-4be6-acfd-7f5699d26c0c",
+    "activeVersionId":  "e9e84cb7-0270-4be6-acfd-7f5699d26c0c",
+    "versionCounter":  175,
+    "triggerCount":  1,
+    "shared":  [
+                   {
+                       "updatedAt":  "2026-04-21T03:24:32.735Z",
+                       "createdAt":  "2026-04-21T03:24:32.735Z",
+                       "role":  "workflow:owner",
+                       "workflowId":  "BsDARTWWev6AHiQf",
+                       "projectId":  "39Z9vXFHHLXQbFwV",
+                       "project":  {
+                                       "updatedAt":  "2026-04-17T02:57:52.456Z",
+                                       "createdAt":  "2026-04-17T02:46:46.254Z",
+                                       "id":  "39Z9vXFHHLXQbFwV",
+                                       "name":  "Jenny Yburan \u003cjenny.wsa11@gmail.com\u003e",
+                                       "type":  "personal",
+                                       "icon":  null,
+                                       "description":  null,
+                                       "creatorId":  "04464fc4-277f-4fc8-9388-38e8a54737d2"
+                                   }
+                   }
+               ],
+    "tags":  [
+
+             ],
+    "activeVersion":  {
+                          "updatedAt":  "2026-04-22T13:08:51.644Z",
+                          "createdAt":  "2026-04-22T13:08:51.644Z",
+                          "versionId":  "e9e84cb7-0270-4be6-acfd-7f5699d26c0c",
+                          "workflowId":  "BsDARTWWev6AHiQf",
+                          "nodes":  [
+                                        {
+                                            "parameters":  {
+                                                               "httpMethod":  "POST",
+                                                               "path":  "receptionist-call",
+                                                               "options":  {
+
+                                                                           }
+                                                           },
+                                            "type":  "n8n-nodes-base.webhook",
+                                            "typeVersion":  2.1,
+                                            "position":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                            "id":  "14ecfa7a-38bc-4b0d-ad43-cf02378c4a7c",
+                                            "name":  "Webhook",
+                                            "webhookId":  "4f3c15c9-f32b-4163-91e0-4869cba28a5f"
+                                        },
+                                        {
+                                            "parameters":  {
+                                                               "method":  "POST",
+                                                               "url":  "https://api.openai.com/v1/chat/completions",
+                                                               "sendHeaders":  true,
+                                                               "headerParameters":  {
+                                                                                        "parameters":  [
+                                                                                                           {
+                                                                                                               "name":  "Content-Type",
+                                                                                                               "value":  "application/json"
+                                                                                                           }
+                                                                                                       ]
+                                                                                    },
+                                                               "sendBody":  true,
+                                                               "specifyBody":  "json",
+                                                               "jsonBody":  "{\n  \"model\": \"gpt-4o-mini\",\n  \"response_format\": { \"type\": \"json_object\" },\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Extract structured fields from a receptionist call transcript. Return JSON only with keys: caller_name, request, details, preferred_date. Use information explicitly present in the transcript. If a field is not present, set it to \\\"Unknown\\\". Do not invent facts.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Transcript:\\n{{ $json.body.call_transcript || ($json.body.call \u0026\u0026 $json.body.call.transcript) || \\\"\\\" }}\"\n    }\n  ]\n}",
+                                                               "options":  {
+
+                                                                           },
+                                                               "authentication":  "genericCredentialType",
+                                                               "genericAuthType":  "httpHeaderAuth"
+                                                           },
+                                            "type":  "n8n-nodes-base.httpRequest",
+                                            "typeVersion":  4.4,
+                                            "position":  [
+                                                             208,
+                                                             0
+                                                         ],
+                                            "id":  "b425e78d-e227-4da3-ac16-ba1e5e2898dc",
+                                            "name":  "HTTP Request",
+                                            "credentials":  {
+                                                                "httpHeaderAuth":  {
+                                                                                       "id":  "LG83vj4C6UPN5AQX",
+                                                                                       "name":  "OpenAI Auth Header"
+                                                                                   }
+                                                            }
+                                        },
+                                        {
+                                            "parameters":  {
+                                                               "jsCode":  "function isUnknown(v) {\n  return !v || String(v).trim() === \u0027\u0027 || String(v).trim().toLowerCase() === \u0027unknown\u0027;\n}\n\nfunction extractFromTranscript(text) {\n  const t = String(text || \u0027\u0027).trim();\n  if (!t) {\n    return {\n      caller_name: \u0027Unknown\u0027,\n      request: \u0027Unknown\u0027,\n      details: \u0027Unknown\u0027,\n      preferred_date: \u0027Unknown\u0027,\n    };\n  }\n\n  const nameMatch = t.match(/(?:this is|i am|i\u0027m|my name is)\\s+([A-Z][a-z]+(?:\\s+[A-Z][a-z]+){0,2})/i);\n  const dateMatch = t.match(/\\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tomorrow)(?:\\s+at\\s+\\d{1,2}(?::\\d{2})?\\s*(?:am|pm)?)?/i)\n    || t.match(/\\b\\d{1,2}(?::\\d{2})?\\s*(?:am|pm)\\b/i);\n\n  const requestSentence = t.split(/(?\u003c=[.!?])\\s+/).find((s) =\u003e\n    /\\b(schedule|book|set up|appointment|follow-up|consultation|repair|estimate|call|meeting)\\b/i.test(s)\n  );\n\n  return {\n    caller_name: nameMatch ? nameMatch[1].trim() : \u0027Unknown\u0027,\n    request: requestSentence ? requestSentence.trim() : t.slice(0, 180),\n    details: t,\n    preferred_date: dateMatch ? dateMatch[0].trim() : \u0027Unknown\u0027,\n  };\n}\n\nconst first = $input.first();\nconst raw = (((first || {}).json || {}).choices || [])[0]?.message?.content || \u0027\u0027;\n\nlet cleaned = String(raw)\n  .replace(/```json/g, \u0027\u0027)\n  .replace(/```/g, \u0027\u0027)\n  .trim();\n\nlet data;\n\ntry {\n  data = JSON.parse(cleaned);\n} catch (e) {\n  data = {\n    caller_name: \u0027Unknown\u0027,\n    request: \u0027Unknown\u0027,\n    details: cleaned || \u0027Unknown\u0027,\n    preferred_date: \u0027Unknown\u0027,\n  };\n}\n\nif (!data.caller_name || /john\\s+doe/i.test(String(data.caller_name))) {\n  data.caller_name = \u0027Unknown\u0027;\n}\n\nfor (const key of [\u0027caller_name\u0027, \u0027request\u0027, \u0027details\u0027, \u0027preferred_date\u0027]) {\n  if (!data[key] || String(data[key]).trim() === \u0027\u0027) {\n    data[key] = \u0027Unknown\u0027;\n  }\n}\n\nlet transcript = \u0027\u0027;\ntry {\n  transcript = String($(\u0027Webhook\u0027).first().json.body.call?.transcript || $(\u0027Webhook\u0027).first().json.body.call_transcript || \u0027\u0027);\n} catch (e) {\n  transcript = \u0027\u0027;\n}\n\nif (isUnknown(data.caller_name) || isUnknown(data.request) || isUnknown(data.preferred_date)) {\n  const fallback = extractFromTranscript(transcript);\n  if (isUnknown(data.caller_name)) data.caller_name = fallback.caller_name;\n  if (isUnknown(data.request)) data.request = fallback.request;\n  if (isUnknown(data.details)) data.details = fallback.details;\n  if (isUnknown(data.preferred_date)) data.preferred_date = fallback.preferred_date;\n}\n\nreturn [{ json: data }];"
+                                                           },
+                                            "type":  "n8n-nodes-base.code",
+                                            "typeVersion":  2,
+                                            "position":  [
+                                                             416,
+                                                             0
+                                                         ],
+                                            "id":  "7bb18523-dfd9-43c3-8b36-0798e1ffeac5",
+                                            "name":  "Code in JavaScript"
+                                        },
+                                        {
+                                            "parameters":  {
+                                                               "method":  "POST",
+                                                               "url":  "https://ghxstoslnwpsuqhlxgpc.supabase.co/rest/v1/receptionist_calls",
+                                                               "sendHeaders":  true,
+                                                               "headerParameters":  {
+                                                                                        "parameters":  [
+                                                                                                           {
+                                                                                                               "name":  "Content-Type",
+                                                                                                               "value":  "application/json"
+                                                                                                           }
+                                                                                                       ]
+                                                                                    },
+                                                               "sendBody":  true,
+                                                               "specifyBody":  "json",
+                                                               "jsonBody":  "={\n  \"caller_name\": \"{{ $json.caller_name }}\",\n  \"request\": \"{{ $json.request }}\",\n  \"details\": \"{{ $json.details }}\",\n  \"preferred_date\": \"{{ $json.preferred_date }}\"\n}",
+                                                               "options":  {
+
+                                                                           },
+                                                               "authentication":  "genericCredentialType",
+                                                               "genericAuthType":  "httpHeaderAuth"
+                                                           },
+                                            "type":  "n8n-nodes-base.httpRequest",
+                                            "typeVersion":  4.4,
+                                            "position":  [
+                                                             624,
+                                                             0
+                                                         ],
+                                            "id":  "0db8fbc3-859f-476c-8372-228534c9d723",
+                                            "name":  "HTTP Request1",
+                                            "credentials":  {
+                                                                "httpHeaderAuth":  {
+                                                                                       "id":  "8PdwVP6SKBclicX2",
+                                                                                       "name":  "Supabase API Key Header"
+                                                                                   }
+                                                            }
+                                        },
+                                        {
+                                            "parameters":  {
+                                                               "calendar":  {
+                                                                                "__rl":  true,
+                                                                                "value":  "jenny.wsa11@gmail.com",
+                                                                                "mode":  "list",
+                                                                                "cachedResultName":  "jenny.wsa11@gmail.com"
+                                                                            },
+                                                               "start":  "={{$json.preferred_date ? new Date($json.preferred_date).toISOString() : $now.toISO()}}",
+                                                               "end":  "={{$json.preferred_date ? new Date(new Date($json.preferred_date).getTime() + 60*60*1000).toISOString() : $now.plus({hours:1}).toISO()}}",
+                                                               "additionalFields":  {
+                                                                                        "description":  "={{$json.details || \"No details provided\"}}",
+                                                                                        "summary":  "={{$json.caller_name || \"Unknown\"}} - {{$json.request || \"No request\"}}"
+                                                                                    }
+                                                           },
+                                            "type":  "n8n-nodes-base.googleCalendar",
+                                            "typeVersion":  1.3,
+                                            "position":  [
+                                                             832,
+                                                             0
+                                                         ],
+                                            "id":  "e206a859-1f68-4254-ad99-7349b93dd8c2",
+                                            "name":  "Create an event",
+                                            "credentials":  {
+                                                                "googleCalendarOAuth2Api":  {
+                                                                                                "id":  "gS1OFrdxHIsgWw8V",
+                                                                                                "name":  "Google Calendar account"
+                                                                                            }
+                                                            }
+                                        },
+                                        {
+                                            "parameters":  {
+                                                               "operation":  "append",
+                                                               "documentId":  {
+                                                                                  "__rl":  true,
+                                                                                  "value":  "1X8laM3UpB4SGsxh7-c9TZjXln-TuvZlTVqqCW2s3oV4",
+                                                                                  "mode":  "list",
+                                                                                  "cachedResultName":  "Receptionist Records",
+                                                                                  "cachedResultUrl":  "https://docs.google.com/spreadsheets/d/1X8laM3UpB4SGsxh7-c9TZjXln-TuvZlTVqqCW2s3oV4/edit?usp=drivesdk"
+                                                                              },
+                                                               "sheetName":  {
+                                                                                 "__rl":  true,
+                                                                                 "value":  "gid=0",
+                                                                                 "mode":  "list",
+                                                                                 "cachedResultName":  "Sheet1",
+                                                                                 "cachedResultUrl":  "https://docs.google.com/spreadsheets/d/1X8laM3UpB4SGsxh7-c9TZjXln-TuvZlTVqqCW2s3oV4/edit#gid=0"
+                                                                             },
+                                                               "columns":  {
+                                                                               "mappingMode":  "defineBelow",
+                                                                               "value":  {
+                                                                                             "Date":  "={{ new Date().toISOString() }}",
+                                                                                             "Name":  "={{$json.caller_name || \"Unknown\"}}",
+                                                                                             "Request":  "={{$json.request || \"No request\"}}",
+                                                                                             "Details":  "={{$json.details || \"No details\"}}",
+                                                                                             "Preferred Date":  "={{ new Date().toISOString() }}"
+                                                                                         },
+                                                                               "matchingColumns":  [
+
+                                                                                                   ],
+                                                                               "schema":  [
+                                                                                              {
+                                                                                                  "id":  "Date",
+                                                                                                  "displayName":  "Date",
+                                                                                                  "required":  false,
+                                                                                                  "defaultMatch":  false,
+                                                                                                  "display":  true,
+                                                                                                  "type":  "string",
+                                                                                                  "canBeUsedToMatch":  true
+                                                                                              },
+                                                                                              {
+                                                                                                  "id":  "Name",
+                                                                                                  "displayName":  "Name",
+                                                                                                  "required":  false,
+                                                                                                  "defaultMatch":  false,
+                                                                                                  "display":  true,
+                                                                                                  "type":  "string",
+                                                                                                  "canBeUsedToMatch":  true
+                                                                                              },
+                                                                                              {
+                                                                                                  "id":  "Request",
+                                                                                                  "displayName":  "Request",
+                                                                                                  "required":  false,
+                                                                                                  "defaultMatch":  false,
+                                                                                                  "display":  true,
+                                                                                                  "type":  "string",
+                                                                                                  "canBeUsedToMatch":  true
+                                                                                              },
+                                                                                              {
+                                                                                                  "id":  "Details",
+                                                                                                  "displayName":  "Details",
+                                                                                                  "required":  false,
+                                                                                                  "defaultMatch":  false,
+                                                                                                  "display":  true,
+                                                                                                  "type":  "string",
+                                                                                                  "canBeUsedToMatch":  true
+                                                                                              },
+                                                                                              {
+                                                                                                  "id":  "Preferred Date",
+                                                                                                  "displayName":  "Preferred Date",
+                                                                                                  "required":  false,
+                                                                                                  "defaultMatch":  false,
+                                                                                                  "display":  true,
+                                                                                                  "type":  "string",
+                                                                                                  "canBeUsedToMatch":  true
+                                                                                              }
+                                                                                          ],
+                                                                               "attemptToConvertTypes":  false,
+                                                                               "convertFieldsToString":  false
+                                                                           },
+                                                               "options":  {
+
+                                                                           }
+                                                           },
+                                            "type":  "n8n-nodes-base.googleSheets",
+                                            "typeVersion":  4.7,
+                                            "position":  [
+                                                             1040,
+                                                             0
+                                                         ],
+                                            "id":  "b65ae6cc-252f-4a60-8289-3bd4a38d4800",
+                                            "name":  "Append row in sheet",
+                                            "credentials":  {
+                                                                "googleSheetsOAuth2Api":  {
+                                                                                              "id":  "LysT6X7fC5v8rYpO",
+                                                                                              "name":  "Google Sheets account"
+                                                                                          }
+                                                            }
+                                        },
+                                        {
+                                            "parameters":  {
+                                                               "sendBody":  true,
+                                                               "headerParameters":  {
+                                                                                        "parameters":  [
+                                                                                                           {
+                                                                                                               "value":  "application/json",
+                                                                                                               "name":  "Content-Type"
+                                                                                                           }
+                                                                                                       ]
+                                                                                    },
+                                                               "bodyParameters":  {
+                                                                                      "parameters":  [
+                                                                                                         {
+                                                                                                             "value":  "=?? **New Call Received**`n`n?? **Name:** {{$node[\"Code in JavaScript\"].json.caller_name}}`n?? **Request:** {{$node[\"Code in JavaScript\"].json.request}}`n?? **Details:** {{$node[\"Code in JavaScript\"].json.details}}`n?? **Preferred Date:** {{$node[\"Code in JavaScript\"].json.preferred_date}}",
+                                                                                                             "name":  "content"
+                                                                                                         }
+                                                                                                     ]
+                                                                                  },
+                                                               "method":  "POST",
+                                                               "options":  {
+
+                                                                           },
+                                                               "sendHeaders":  true,
+                                                               "url":  "https://primary-production-a826.up.railway.app/webhook/discord-relay-6f2b9a"
+                                                           },
+                                            "type":  "n8n-nodes-base.httpRequest",
+                                            "typeVersion":  4.4,
+                                            "position":  [
+                                                             1248,
+                                                             0
+                                                         ],
+                                            "id":  "5cdbbb3b-31e3-4415-a2a8-655aebe4156a",
+                                            "name":  "HTTP Request2",
+                                            "webhookId":  "1d7e9814-c374-4049-940d-d79a4721350c"
+                                        },
+                                        {
+                                            "parameters":  {
+                                                               "conditions":  {
+                                                                                  "options":  {
+                                                                                                  "caseSensitive":  true,
+                                                                                                  "leftValue":  "",
+                                                                                                  "typeValidation":  "strict",
+                                                                                                  "version":  2
+                                                                                              },
+                                                                                  "conditions":  [
+                                                                                                     {
+                                                                                                         "id":  "event-condition",
+                                                                                                         "leftValue":  "={{$json.body.event}}",
+                                                                                                         "rightValue":  "call_analyzed",
+                                                                                                         "operator":  {
+                                                                                                                          "type":  "string",
+                                                                                                                          "operation":  "equals"
+                                                                                                                      }
+                                                                                                     }
+                                                                                                 ],
+                                                                                  "combinator":  "and"
+                                                                              },
+                                                               "options":  {
+
+                                                                           }
+                                                           },
+                                            "type":  "n8n-nodes-base.if",
+                                            "typeVersion":  2.2,
+                                            "position":  [
+                                                             104,
+                                                             0
+                                                         ],
+                                            "id":  "3df12d59-6b28-4e1c-83d4-cf5f4cbf36af",
+                                            "name":  "Only call_analyzed"
+                                        }
+                                    ],
+                          "connections":  {
+                                              "Webhook":  {
+                                                              "main":  [
+                                                                           [
+                                                                               {
+                                                                                   "node":  "Only call_analyzed",
+                                                                                   "type":  "main",
+                                                                                   "index":  0
+                                                                               }
+                                                                           ]
+                                                                       ]
+                                                          },
+                                              "HTTP Request":  {
+                                                                   "main":  [
+                                                                                [
+                                                                                    {
+                                                                                        "node":  "Code in JavaScript",
+                                                                                        "type":  "main",
+                                                                                        "index":  0
+                                                                                    }
+                                                                                ]
+                                                                            ]
+                                                               },
+                                              "Code in JavaScript":  {
+                                                                         "main":  [
+                                                                                      [
+                                                                                          {
+                                                                                              "node":  "HTTP Request1",
+                                                                                              "type":  "main",
+                                                                                              "index":  0
+                                                                                          }
+                                                                                      ]
+                                                                                  ]
+                                                                     },
+                                              "HTTP Request1":  {
+                                                                    "main":  [
+                                                                                 [
+                                                                                     {
+                                                                                         "node":  "Create an event",
+                                                                                         "type":  "main",
+                                                                                         "index":  0
+                                                                                     }
+                                                                                 ]
+                                                                             ]
+                                                                },
+                                              "Create an event":  {
+                                                                      "main":  [
+                                                                                   [
+                                                                                       {
+                                                                                           "node":  "Append row in sheet",
+                                                                                           "type":  "main",
+                                                                                           "index":  0
+                                                                                       }
+                                                                                   ]
+                                                                               ]
+                                                                  },
+                                              "Append row in sheet":  {
+                                                                          "main":  [
+                                                                                       [
+                                                                                           {
+                                                                                               "node":  "HTTP Request2",
+                                                                                               "type":  "main",
+                                                                                               "index":  0
+                                                                                           }
+                                                                                       ]
+                                                                                   ]
+                                                                      },
+                                              "Only call_analyzed":  {
+                                                                         "main":  [
+                                                                                      [
+                                                                                          {
+                                                                                              "node":  "HTTP Request",
+                                                                                              "type":  "main",
+                                                                                              "index":  0
+                                                                                          }
+                                                                                      ],
+                                                                                      [
+
+                                                                                      ]
+                                                                                  ]
+                                                                     }
+                                          },
+                          "authors":  "Jenny Yburan",
+                          "name":  null,
+                          "description":  null,
+                          "autosaved":  false,
+                          "workflowPublishHistory":  [
+                                                         {
+                                                             "createdAt":  "2026-04-22T13:08:51.696Z",
+                                                             "id":  29,
+                                                             "workflowId":  "BsDARTWWev6AHiQf",
+                                                             "versionId":  "e9e84cb7-0270-4be6-acfd-7f5699d26c0c",
+                                                             "event":  "deactivated",
+                                                             "userId":  "04464fc4-277f-4fc8-9388-38e8a54737d2"
+                                                         },
+                                                         {
+                                                             "createdAt":  "2026-04-22T13:08:51.726Z",
+                                                             "id":  30,
+                                                             "workflowId":  "BsDARTWWev6AHiQf",
+                                                             "versionId":  "e9e84cb7-0270-4be6-acfd-7f5699d26c0c",
+                                                             "event":  "activated",
+                                                             "userId":  "04464fc4-277f-4fc8-9388-38e8a54737d2"
+                                                         }
+                                                     ]
+                      }
+}
